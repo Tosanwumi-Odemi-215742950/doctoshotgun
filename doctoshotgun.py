@@ -168,10 +168,67 @@ class Builder(ABC):
 
 class AppointmentBuilder1(Builder):
     def __init__(self) -> None:
-        # A fresh appointment / session would always contain the account or patient name, country
-        # and city, which is them used in further booking with other optional arguments
+        # A fresh appointment / session would always contain the account or patient name,
+        # which is them used in further booking with other optional arguments
 
         self.setPatient
+
+    def setPatient(self) -> None:
+        if len(patients) == 0:
+            print("It seems that you don't have any Patient registered in your Doctolib account. Please fill your Patient data on Doctolib Website.")
+            return 1
+        if args.patient >= 0 and args.patient < len(patients):
+            docto.patient = patients[args.patient]
+        elif len(patients) > 1:
+            print('Available patients are:')
+            for i, patient in enumerate(patients):
+                print('* [%s] %s %s' %
+                      (i, patient['first_name'], patient['last_name']))
+            while True:
+                print('For which patient do you want to book a slot?',
+                      end=' ', flush=True)
+                try:
+                    docto.patient = patients[int(sys.stdin.readline().strip())]
+                except (ValueError, IndexError):
+                    continue
+                else:
+                    break
+        else:
+            docto.patient = patients[0]
+
+class Director:
+    "The Director is responsible for executing the building steps in a particular sequence"
+
+    def __init__(self):
+        self._builder = None
+
+    def builder(self) -> Builder:
+        return self._builder
+
+    @builder.setter
+    def builder(self, builder: Builder):
+        self._builder = builder
+
+    def build_basic_appointment(self) -> None:
+        self.builder.setPatient()
+        self.builder.setCountry()
+        self.builder.setCity()
+
+    def build_special_appointment1(self) -> None:
+        # basic appointment + specific time window (change from default = 7)
+        self.builder.build_basic_appointment
+        self.builder.setTimeWindow
+
+    def build_special_appointment2(self) -> None:
+        # basic appointment + specified vaccine type
+        self.builder.build_basic_appointment
+        self.builder.setVaccineMotive
+
+    def build_special_appointment3(self) -> None:
+        # basic appointment + specified vaccine type + dose
+        self.builder.build_special_appointment2
+        self.builder.setDose
+
 
 class CenterBookingPage(JsonPage):
     def find_motive(self, regex, singleShot=False):
@@ -728,27 +785,8 @@ class Application:
             return 1
 
         patients = docto.get_patients()
-        if len(patients) == 0:
-            print("It seems that you don't have any Patient registered in your Doctolib account. Please fill your Patient data on Doctolib Website.")
-            return 1
-        if args.patient >= 0 and args.patient < len(patients):
-            docto.patient = patients[args.patient]
-        elif len(patients) > 1:
-            print('Available patients are:')
-            for i, patient in enumerate(patients):
-                print('* [%s] %s %s' %
-                      (i, patient['first_name'], patient['last_name']))
-            while True:
-                print('For which patient do you want to book a slot?',
-                      end=' ', flush=True)
-                try:
-                    docto.patient = patients[int(sys.stdin.readline().strip())]
-                except (ValueError, IndexError):
-                    continue
-                else:
-                    break
-        else:
-            docto.patient = patients[0]
+        # took out patient from here
+        
 
         motives = []
         if not args.pfizer and not args.moderna and not args.janssen and not args.astrazeneca:
