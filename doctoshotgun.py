@@ -3,6 +3,7 @@ import sys
 import re
 import logging
 import tempfile
+from abc import ABC, abstractmethod
 from time import sleep
 import json
 from urllib.parse import urlparse
@@ -132,9 +133,46 @@ class CenterPage(HTMLPage):
     pass
 
 
-# Second Implementation of Aggregate Domain Pattern
-# This class will contain all the necessary information/functions to
-#   start a session/booking of an appointment
+class Builder(ABC):
+    "The Builder Interface"
+    # specifying methods for creating / booking appointments with different arguments
+
+    @property
+    @abstractmethod
+    def setPatient(self) -> None:
+        pass
+    
+    @abstractmethod
+    def setCountry(self) -> None:
+        pass
+
+    @abstractmethod
+    def setCity(self) -> None:
+        pass
+
+    @abstractmethod
+    def setTimeWindow(self) -> None:
+        pass
+
+    @abstractmethod
+    def setVaccineMotive(self) -> None:
+        pass
+
+    @abstractmethod
+    def setDose(self) -> None:
+        pass
+    
+    @abstractmethod
+    def setDate(self) -> None:
+        pass
+
+class AppointmentBuilder1(Builder):
+    def __init__(self) -> None:
+        # A fresh appointment / session would always contain the account or patient name, country
+        # and city, which is them used in further booking with other optional arguments
+
+        self.setPatient
+
 class CenterBookingPage(JsonPage):
     def find_motive(self, regex, singleShot=False):
         for s in self.doc['data']['visit_motives']:
@@ -174,45 +212,7 @@ class CenterBookingPage(JsonPage):
     def get_profile_id(self):
         return self.doc['data']['profile']['id']
 
-    # AppointmentEditPage
-    def get_custom_fields(self):
-        for field in self.doc['appointment']['custom_fields']:
-            if field['required']:
-                yield field
 
-    # Get patient for appointment (MasterPatientPage)
-    def get_patients(self):
-        return self.doc
-
-    def get_name(self):
-        return '%s %s' % (self.doc[0]['first_name'], self.doc[0]['last_name'])
-
-    def get_patient(self, args, docto):
-        patients = docto.get_patients()
-        if len(patients) == 0:
-            print("It seems that you don't have any Patient registered in your Doctolib account. Please fill your Patient data on Doctolib Website.")
-            return 1
-        if args.patient >= 0 and args.patient < len(patients):
-            docto.patient = patients[args.patient]
-        elif len(patients) > 1:
-            print('Available patients are:')
-            for i, patient in enumerate(patients):
-                print('* [%s] %s %s' %
-                      (i, patient['first_name'], patient['last_name']))
-            while True:
-                print('For which patient do you want to book a slot?',
-                      end=' ', flush=True)
-                try:
-                    docto.patient = patients[int(sys.stdin.readline().strip())]
-                except (ValueError, IndexError):
-                    continue
-                else:
-                    break
-        else:
-            docto.patient = patients[0]
-
-
-# Aggregate Root
 class AvailabilitiesPage(JsonPage):
     def find_best_slot(self, start_date=None, end_date=None):
         for a in self.doc['availabilities']:
@@ -231,118 +231,24 @@ class AppointmentPage(JsonPage):
     def is_error(self):
         return 'error' in self.doc
 
-# First Aggregate Class
-# Gets the available time slot/window do
-class AvailableSlot:
-    def __init__(self, docto, args, vaccine_list):
-        self.docto = docto
-        self.args = args
-        self.vaccine_list = vaccine_list
 
-    def getTimeWindow(self, args):
-        if args.start_date:
-            try:
-                start_date = datetime.datetime.strptime(
-                    args.start_date, '%d/%m/%Y').date()
-            except ValueError as e:
-                print('Invalid value for --start-date: %s' % e)
-                return 1
-        else:
-            start_date = datetime.date.today()
-        if args.end_date:
-            try:
-                end_date = datetime.datetime.strptime(
-                    args.end_date, '%d/%m/%Y').date()
-            except ValueError as e:
-                print('Invalid value for --end-date: %s' % e)
-                return 1
-        else:
-            end_date = start_date + relativedelta(days=args.time_window)
+class AppointmentEditPage(JsonPage):
+    def get_custom_fields(self):
+        for field in self.doc['appointment']['custom_fields']:
+            if field['required']:
+                yield field
 
-    def getTimeSlot(self, args, docto, vaccine_list, start_date, end_date):
-        log('Starting to look for vaccine slots for %s %s between %s and %s...',
-            docto.patient['first_name'], docto.patient['last_name'], start_date, end_date)
-        log('Vaccines: %s', ', '.join(vaccine_list))
-        log('Country: %s ', args.country)
-        log('This may take a few minutes/hours, be patient!')
-        cities = [docto.normalize(city) for city in args.city.split(',')]
-
-        while True:
-            log_ts()
-            try:
-                for center in docto.find_centers(cities, motives):
-                    if args.center:
-                        if center['name_with_title'] not in args.center:
-                            logging.debug("Skipping center '%s'" %
-                                          center['name_with_title'])
-                            continue
-                    if args.center_regex:
-                        center_matched = False
-                        for center_regex in args.center_regex:
-                            if re.match(center_regex, center['name_with_title']):
-                                center_matched = True
-                            else:
-                                logging.debug(
-                                    "Skipping center '%(name_with_title)s'" % center)
-                        if not center_matched:
-                            continue
-                    if args.center_exclude:
-                        if center['name_with_title'] in args.center_exclude:
-                            logging.debug(
-                                "Skipping center '%(name_with_title)s' because it's excluded" % center)
-                            continue
-                    if args.center_exclude_regex:
-                        center_excluded = False
-                        for center_exclude_regex in args.center_exclude_regex:
-                            if re.match(center_exclude_regex, center['name_with_title']):
-                                logging.debug(
-                                    "Skipping center '%(name_with_title)s' because it's excluded" % center)
-                                center_excluded = True
-                        if center_excluded:
-                            continue
-                    if not args.include_neighbor_city and not docto.normalize(center['city']).startswith(tuple(cities)):
-                        logging.debug(
-                            "Skipping city '%(city)s' %(name_with_title)s" % center)
-                        continue
-
-                    log('')
-
-                    log('Center %(name_with_title)s (%(city)s):' % center)
-
-                    if docto.try_to_book(center, vaccine_list, start_date, end_date, args.only_second, args.only_third, args.dry_run):
-                        log('')
-                        log('💉 %s Congratulations.' %
-                            colored('Booked!', 'green', attrs=('bold',)))
-                        return 0
-
-                    sleep(SLEEP_INTERVAL_AFTER_CENTER)
-
-                    log('')
-                log('No free slots found at selected centers. Trying another round in %s sec...', SLEEP_INTERVAL_AFTER_RUN)
-                sleep(SLEEP_INTERVAL_AFTER_RUN)
-            except CityNotFound as e:
-                print('\n%s: City %s not found. Make sure you selected a city from the available countries.' % (
-                    colored('Error', 'red'), colored(e, 'yellow')))
-                return 1
-            except (ReadTimeout, ConnectionError, NewConnectionError) as e:
-                print('\n%s' % (colored(
-                    'Connection error. Check your internet connection. Retrying ...', 'red')))
-                print(str(e))
-                sleep(SLEEP_INTERVAL_AFTER_CONNECTION_ERROR)
-            except Exception as e:
-                template = "An unexpected exception of type {0} occurred. Arguments:\n{1!r}"
-                message = template.format(type(e).__name__, e.args)
-                print(message)
-                return 1
-        return 0
-        
-
-# Second aggregate class
-# class BookAppointment(JsonPage): - change every call to BookAppointment to CenterBookingPage
-     
 
 class AppointmentPostPage(JsonPage):
     pass
+
+
+class MasterPatientPage(JsonPage):
+    def get_patients(self):
+        return self.doc
+
+    def get_name(self):
+        return '%s %s' % (self.doc[0]['first_name'], self.doc[0]['last_name'])
 
 
 class CityNotFound(Exception):
@@ -366,10 +272,10 @@ class Doctolib(LoginBrowser):
         r'/second_shot_availabilities.json', AvailabilitiesPage)
     appointment = URL(r'/appointments.json', AppointmentPage)
     appointment_edit = URL(
-        r'/appointments/(?P<id>.+)/edit.json', CenterBookingPage)
+        r'/appointments/(?P<id>.+)/edit.json', AppointmentEditPage)
     appointment_post = URL(
         r'/appointments/(?P<id>.+).json', AppointmentPostPage)
-    master_patient = URL(r'/account/master_patients.json', CenterBookingPage)
+    master_patient = URL(r'/account/master_patients.json', MasterPatientPage)
 
     def _setup_session(self, profile):
         session = Session()
@@ -821,8 +727,28 @@ class Application:
         if not docto.do_login(args.code):
             return 1
 
-        # call on aggregate class to get the patient for the appointment
-        docto.patient = CenterBookingPage().get_patient(args, docto)
+        patients = docto.get_patients()
+        if len(patients) == 0:
+            print("It seems that you don't have any Patient registered in your Doctolib account. Please fill your Patient data on Doctolib Website.")
+            return 1
+        if args.patient >= 0 and args.patient < len(patients):
+            docto.patient = patients[args.patient]
+        elif len(patients) > 1:
+            print('Available patients are:')
+            for i, patient in enumerate(patients):
+                print('* [%s] %s %s' %
+                      (i, patient['first_name'], patient['last_name']))
+            while True:
+                print('For which patient do you want to book a slot?',
+                      end=' ', flush=True)
+                try:
+                    docto.patient = patients[int(sys.stdin.readline().strip())]
+                except (ValueError, IndexError):
+                    continue
+                else:
+                    break
+        else:
+            docto.patient = patients[0]
 
         motives = []
         if not args.pfizer and not args.moderna and not args.janssen and not args.astrazeneca:
@@ -878,10 +804,99 @@ class Application:
 
         vaccine_list = [docto.vaccine_motives[motive] for motive in motives]
 
-        # call on aggregate class to search for available slots
-        AvailableSlot(vaccine_list)
+        if args.start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                    args.start_date, '%d/%m/%Y').date()
+            except ValueError as e:
+                print('Invalid value for --start-date: %s' % e)
+                return 1
+        else:
+            start_date = datetime.date.today()
+        if args.end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    args.end_date, '%d/%m/%Y').date()
+            except ValueError as e:
+                print('Invalid value for --end-date: %s' % e)
+                return 1
+        else:
+            end_date = start_date + relativedelta(days=args.time_window)
+        log('Starting to look for vaccine slots for %s %s between %s and %s...',
+            docto.patient['first_name'], docto.patient['last_name'], start_date, end_date)
+        log('Vaccines: %s', ', '.join(vaccine_list))
+        log('Country: %s ', args.country)
+        log('This may take a few minutes/hours, be patient!')
+        cities = [docto.normalize(city) for city in args.city.split(',')]
 
-        
+        while True:
+            log_ts()
+            try:
+                for center in docto.find_centers(cities, motives):
+                    if args.center:
+                        if center['name_with_title'] not in args.center:
+                            logging.debug("Skipping center '%s'" %
+                                          center['name_with_title'])
+                            continue
+                    if args.center_regex:
+                        center_matched = False
+                        for center_regex in args.center_regex:
+                            if re.match(center_regex, center['name_with_title']):
+                                center_matched = True
+                            else:
+                                logging.debug(
+                                    "Skipping center '%(name_with_title)s'" % center)
+                        if not center_matched:
+                            continue
+                    if args.center_exclude:
+                        if center['name_with_title'] in args.center_exclude:
+                            logging.debug(
+                                "Skipping center '%(name_with_title)s' because it's excluded" % center)
+                            continue
+                    if args.center_exclude_regex:
+                        center_excluded = False
+                        for center_exclude_regex in args.center_exclude_regex:
+                            if re.match(center_exclude_regex, center['name_with_title']):
+                                logging.debug(
+                                    "Skipping center '%(name_with_title)s' because it's excluded" % center)
+                                center_excluded = True
+                        if center_excluded:
+                            continue
+                    if not args.include_neighbor_city and not docto.normalize(center['city']).startswith(tuple(cities)):
+                        logging.debug(
+                            "Skipping city '%(city)s' %(name_with_title)s" % center)
+                        continue
+
+                    log('')
+
+                    log('Center %(name_with_title)s (%(city)s):' % center)
+
+                    if docto.try_to_book(center, vaccine_list, start_date, end_date, args.only_second, args.only_third, args.dry_run):
+                        log('')
+                        log('💉 %s Congratulations.' %
+                            colored('Booked!', 'green', attrs=('bold',)))
+                        return 0
+
+                    sleep(SLEEP_INTERVAL_AFTER_CENTER)
+
+                    log('')
+                log('No free slots found at selected centers. Trying another round in %s sec...', SLEEP_INTERVAL_AFTER_RUN)
+                sleep(SLEEP_INTERVAL_AFTER_RUN)
+            except CityNotFound as e:
+                print('\n%s: City %s not found. Make sure you selected a city from the available countries.' % (
+                    colored('Error', 'red'), colored(e, 'yellow')))
+                return 1
+            except (ReadTimeout, ConnectionError, NewConnectionError) as e:
+                print('\n%s' % (colored(
+                    'Connection error. Check your internet connection. Retrying ...', 'red')))
+                print(str(e))
+                sleep(SLEEP_INTERVAL_AFTER_CONNECTION_ERROR)
+            except Exception as e:
+                template = "An unexpected exception of type {0} occurred. Arguments:\n{1!r}"
+                message = template.format(type(e).__name__, e.args)
+                print(message)
+                return 1
+        return 0
 
 
 if __name__ == '__main__':
