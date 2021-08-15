@@ -138,6 +138,10 @@ class Builder(ABC):
     # specifying methods for creating / booking appointments with different arguments
 
     @property
+    @abstract method
+    def product(self):
+        pass
+
     @abstractmethod
     def setPatient(self) -> None:
         pass
@@ -166,12 +170,19 @@ class Builder(ABC):
     def setDate(self) -> None:
         pass
 
+class Product:
+    def __init__(self, args):
+        self.parts = args
+
 class AppointmentBuilder1(Builder):
     def __init__(self) -> None:
         # A fresh appointment / session would always contain the account or patient name,
         # which is them used in further booking with other optional arguments
 
-        self.setPatient
+        self.reset()
+
+    def product(self):
+        self._product = Product1
 
     def setPatient(self) -> None:
         if len(patients) == 0:
@@ -195,6 +206,28 @@ class AppointmentBuilder1(Builder):
                     break
         else:
             docto.patient = patients[0]
+
+    def setDate(self):
+        if self.product.parts.start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                args.start_date, '%d/%m/%Y').date()
+            except ValueError as e:
+                print('Invalid value for --start-date: %s' % e)
+                return 1
+        else:
+            start_date = datetime.date.today()
+
+        if self.product.parts.end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    args.end_date, '%d/%m/%Y').date()
+            except ValueError as e:
+                print('Invalid value for --end-date: %s' % e)
+                return 1
+        else:
+            end_date = start_date + relativedelta(days=args.time_window)
+
 
 class Director:
     "The Director is responsible for executing the building steps in a particular sequence"
@@ -843,23 +876,11 @@ class Application:
         vaccine_list = [docto.vaccine_motives[motive] for motive in motives]
 
         if args.start_date:
-            try:
-                start_date = datetime.datetime.strptime(
-                    args.start_date, '%d/%m/%Y').date()
-            except ValueError as e:
-                print('Invalid value for --start-date: %s' % e)
-                return 1
-        else:
-            start_date = datetime.date.today()
+            #took out start date from here
+            
         if args.end_date:
-            try:
-                end_date = datetime.datetime.strptime(
-                    args.end_date, '%d/%m/%Y').date()
-            except ValueError as e:
-                print('Invalid value for --end-date: %s' % e)
-                return 1
-        else:
-            end_date = start_date + relativedelta(days=args.time_window)
+            #took out end date from here
+
         log('Starting to look for vaccine slots for %s %s between %s and %s...',
             docto.patient['first_name'], docto.patient['last_name'], start_date, end_date)
         log('Vaccines: %s', ', '.join(vaccine_list))
