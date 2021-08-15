@@ -3,6 +3,7 @@ import sys
 import re
 import logging
 import tempfile
+from abc import ABC, abstractmethod
 from time import sleep
 import json
 from urllib.parse import urlparse
@@ -130,6 +131,207 @@ class CenterResultPage(JsonPage):
 
 class CenterPage(HTMLPage):
     pass
+
+
+class Builder(ABC):
+    "The Builder Interface"
+    # specifying methods for creating / booking appointments with different arguments
+
+    @property
+    @abstractmethod
+    def product(self) -> None:
+        pass
+
+    @abstractmethod
+    def setPatient(self) -> None:
+        pass
+    
+    @abstractmethod
+    def setCountry(self) -> None:
+        pass
+
+    @abstractmethod
+    def setCity(self) -> None:
+        pass
+
+    @abstractmethod
+    def setTimeWindow(self) -> None:
+        pass
+
+    @abstractmethod
+    def setVaccineMotive(self) -> None:
+        pass
+
+    @abstractmethod
+    def setDose(self) -> None:
+        pass
+    
+    @abstractmethod
+    def setDate(self) -> None:
+        pass
+
+
+class Product1():
+    def __init__(self, args) -> None:
+        self.parts = args
+
+
+class AppointmentBuilder1(Builder):
+    def __init__(self) -> None:
+        # A fresh appointment / session would always contain the account or patient name,
+        # which is them used in further booking with other optional arguments
+
+        self.reset()
+
+    def reset(self) -> None:
+        self._product = Product1()
+
+    def product(self) -> Product1:
+        product = self._product
+        self.reset
+        return product
+
+    def setPatient(self) -> None:
+        if len(patients) == 0:
+            print("It seems that you don't have any Patient registered in your Doctolib account. Please fill your Patient data on Doctolib Website.")
+            return 1
+        if self.product.patient >= 0 and self.product.patient < len(patients):
+            docto.patient = patients[args.patient]
+        elif len(patients) > 1:
+            print('Available patients are:')
+            for i, patient in enumerate(patients):
+                print('* [%s] %s %s' %
+                      (i, patient['first_name'], patient['last_name']))
+            while True:
+                print('For which patient do you want to book a slot?',
+                      end=' ', flush=True)
+                try:
+                    docto.patient = patients[int(sys.stdin.readline().strip())]
+                except (ValueError, IndexError):
+                    continue
+                else:
+                    break
+        else:
+            docto.patient = patients[0]
+
+    def setCountry(self):
+        self.product.country
+
+    def setCity(self):
+        self.cities = [docto.normalize(city) for city in self.product.city.split(',')]
+        # self.product.city
+
+    def setTimeWindow(self):
+        self.product.time_window
+
+    def setVaccineMotive(self):
+        if not self.product.pfizer and not self.product.moderna and not self.product.janssen and not self.product.astrazeneca:
+            if self.product.only_second:
+                motives.append(docto.KEY_PFIZER_SECOND)
+                motives.append(docto.KEY_MODERNA_SECOND)
+                # motives.append(docto.KEY_ASTRAZENECA_SECOND) #do not add AstraZeneca by default
+            elif self.product.only_third:
+                if not docto.KEY_PFIZER_THIRD and not docto.KEY_MODERNA_THIRD:
+                    print('Invalid args: No third shot vaccinations in this country')
+                    return 1
+                motives.append(docto.KEY_PFIZER_THIRD)
+                motives.append(docto.KEY_MODERNA_THIRD)
+            else:
+                motives.append(docto.KEY_PFIZER)
+                motives.append(docto.KEY_MODERNA)
+                motives.append(docto.KEY_JANSSEN)
+                # motives.append(docto.KEY_ASTRAZENECA) #do not add AstraZeneca by default
+        if self.product.pfizer:
+            if args.only_second:
+                motives.append(docto.KEY_PFIZER_SECOND)
+            elif args.only_third:
+                if not docto.KEY_PFIZER_THIRD:  # not available in all countries
+                    print('Invalid args: Pfizer has no third shot in this country')
+                    return 1
+                motives.append(docto.KEY_PFIZER_THIRD)
+            else:
+                motives.append(docto.KEY_PFIZER)
+        if self.product.moderna:
+            if args.only_second:
+                motives.append(docto.KEY_MODERNA_SECOND)
+            elif args.only_third:
+                if not docto.KEY_MODERNA_THIRD:  # not available in all countries
+                    print('Invalid args: Moderna has no third shot in this country')
+                    return 1
+                motives.append(docto.KEY_MODERNA_THIRD)
+            else:
+                motives.append(docto.KEY_MODERNA)
+        if self.product.janssen:
+            if args.only_second or args.only_third:
+                print('Invalid args: Janssen has no second or third shot')
+                return 1
+            else:
+                motives.append(docto.KEY_JANSSEN)
+        if self.product.astrazeneca:
+            if args.only_second:
+                motives.append(docto.KEY_ASTRAZENECA_SECOND)
+            elif args.only_third:
+                print('Invalid args: AstraZeneca has no third shot')
+                return 1
+            else:
+                motives.append(docto.KEY_ASTRAZENECA)
+
+    def setDate(self):
+        if self.product.parts.start_date:
+            try:
+                start_date = datetime.datetime.strptime(
+                args.start_date, '%d/%m/%Y').date()
+            except ValueError as e:
+                print('Invalid value for --start-date: %s' % e)
+                return 1
+        else:
+            start_date = datetime.date.today()
+
+        if self.product.parts.end_date:
+            try:
+                end_date = datetime.datetime.strptime(
+                    args.end_date, '%d/%m/%Y').date()
+            except ValueError as e:
+                print('Invalid value for --end-date: %s' % e)
+                return 1
+        else:
+            end_date = start_date + relativedelta(days=args.time_window)
+
+
+
+    
+#class Director:
+    #"The Director is responsible for executing the building steps in a particular sequence"
+
+    #def __init__(self):
+        #self._builder = None
+
+    #def builder(self) -> Builder:
+        #return self._builder
+
+   # @builder
+   # def builder(self, builder: Builder):
+   #     self._builder = builder
+
+   # def build_basic_appointment(self) -> None:
+   #     self.builder.setPatient()
+   #     self.builder.setCountry()
+   #     self.builder.setCity()
+
+   # def build_special_appointment1(self) -> None:
+        # basic appointment + specific time window (change from default = 7)
+   #     self.builder.build_basic_appointment
+   #     self.builder.setTimeWindow
+   #
+   # def build_special_appointment2(self) -> None:
+        # basic appointment + specified vaccine type
+   #     self.builder.build_basic_appointment
+   #     self.builder.setVaccineMotive
+
+   # def build_special_appointment3(self) -> None:
+        # basic appointment + specified vaccine type + dose
+   #     self.builder.build_special_appointment2
+   #     self.builder.setDose
 
 
 class CenterBookingPage(JsonPage):
@@ -686,107 +888,37 @@ class Application:
         if not docto.do_login(args.code):
             return 1
 
+        # Added client code part of the builder pattern
+        builder = AppointmentBuilder1()
+
         patients = docto.get_patients()
-        if len(patients) == 0:
-            print("It seems that you don't have any Patient registered in your Doctolib account. Please fill your Patient data on Doctolib Website.")
-            return 1
-        if args.patient >= 0 and args.patient < len(patients):
-            docto.patient = patients[args.patient]
-        elif len(patients) > 1:
-            print('Available patients are:')
-            for i, patient in enumerate(patients):
-                print('* [%s] %s %s' %
-                      (i, patient['first_name'], patient['last_name']))
-            while True:
-                print('For which patient do you want to book a slot?',
-                      end=' ', flush=True)
-                try:
-                    docto.patient = patients[int(sys.stdin.readline().strip())]
-                except (ValueError, IndexError):
-                    continue
-                else:
-                    break
-        else:
-            docto.patient = patients[0]
+        # took out patient from here
+        builder.product.setPatient
+        
 
         motives = []
-        if not args.pfizer and not args.moderna and not args.janssen and not args.astrazeneca:
-            if args.only_second:
-                motives.append(docto.KEY_PFIZER_SECOND)
-                motives.append(docto.KEY_MODERNA_SECOND)
-                # motives.append(docto.KEY_ASTRAZENECA_SECOND) #do not add AstraZeneca by default
-            elif args.only_third:
-                if not docto.KEY_PFIZER_THIRD and not docto.KEY_MODERNA_THIRD:
-                    print('Invalid args: No third shot vaccinations in this country')
-                    return 1
-                motives.append(docto.KEY_PFIZER_THIRD)
-                motives.append(docto.KEY_MODERNA_THIRD)
-            else:
-                motives.append(docto.KEY_PFIZER)
-                motives.append(docto.KEY_MODERNA)
-                motives.append(docto.KEY_JANSSEN)
-                # motives.append(docto.KEY_ASTRAZENECA) #do not add AstraZeneca by default
-        if args.pfizer:
-            if args.only_second:
-                motives.append(docto.KEY_PFIZER_SECOND)
-            elif args.only_third:
-                if not docto.KEY_PFIZER_THIRD:  # not available in all countries
-                    print('Invalid args: Pfizer has no third shot in this country')
-                    return 1
-                motives.append(docto.KEY_PFIZER_THIRD)
-            else:
-                motives.append(docto.KEY_PFIZER)
-        if args.moderna:
-            if args.only_second:
-                motives.append(docto.KEY_MODERNA_SECOND)
-            elif args.only_third:
-                if not docto.KEY_MODERNA_THIRD:  # not available in all countries
-                    print('Invalid args: Moderna has no third shot in this country')
-                    return 1
-                motives.append(docto.KEY_MODERNA_THIRD)
-            else:
-                motives.append(docto.KEY_MODERNA)
-        if args.janssen:
-            if args.only_second or args.only_third:
-                print('Invalid args: Janssen has no second or third shot')
-                return 1
-            else:
-                motives.append(docto.KEY_JANSSEN)
-        if args.astrazeneca:
-            if args.only_second:
-                motives.append(docto.KEY_ASTRAZENECA_SECOND)
-            elif args.only_third:
-                print('Invalid args: AstraZeneca has no third shot')
-                return 1
-            else:
-                motives.append(docto.KEY_ASTRAZENECA)
+        # took out if statements from here
+        builder.product.setVaccineMotive
 
         vaccine_list = [docto.vaccine_motives[motive] for motive in motives]
 
         if args.start_date:
-            try:
-                start_date = datetime.datetime.strptime(
-                    args.start_date, '%d/%m/%Y').date()
-            except ValueError as e:
-                print('Invalid value for --start-date: %s' % e)
-                return 1
-        else:
-            start_date = datetime.date.today()
+            #took out start date from here
+            builder.product.setDate
+            #pass
+            
         if args.end_date:
-            try:
-                end_date = datetime.datetime.strptime(
-                    args.end_date, '%d/%m/%Y').date()
-            except ValueError as e:
-                print('Invalid value for --end-date: %s' % e)
-                return 1
-        else:
-            end_date = start_date + relativedelta(days=args.time_window)
+            #took out end date from here
+            builder.product.setDate
+            #pass
+
         log('Starting to look for vaccine slots for %s %s between %s and %s...',
             docto.patient['first_name'], docto.patient['last_name'], start_date, end_date)
         log('Vaccines: %s', ', '.join(vaccine_list))
         log('Country: %s ', args.country)
         log('This may take a few minutes/hours, be patient!')
-        cities = [docto.normalize(city) for city in args.city.split(',')]
+        # took out cities = [docto.normalize(city) for city in args.city.split(',')] from here
+        builder.product.setCity
 
         while True:
             log_ts()
