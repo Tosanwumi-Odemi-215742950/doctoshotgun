@@ -190,8 +190,50 @@ class City(Country):
                     yield center
 
 class Center(Country):
+    def find_city(self, args):
+        self.args.city
 
+    def find_centers(self, where, motives=None, page=1):
+        if motives is None:
+            motives = self.vaccine_motives.keys()
+        for city in where:
+            try:
+                self.centers.go(where=city, params={
+                                'ref_visit_motive_ids[]': motives, 'page': page})
+            except ServerError as e:
+                if e.response.status_code in [503]:
+                    if 'text/html' in e.response.headers['Content-Type'] \
+                        and ('cloudflare' in e.response.text or
+                             'Checking your browser before accessing' in e .response.text):
+                        log('Request blocked by CloudFlare', color='red')
+                    return
+                if e.response.status_code in [520]:
+                    log('Cloudflare is unable to connect to Doctolib server. Please retry later.', color='red')
+                    return
+                raise
+            except HTTPNotFound as e:
+                raise CityNotFound(city) from e
 
+            next_page = self.page.get_next_page()
+
+            for i in self.page.iter_centers_ids():
+                page = self.center_result.open(
+                    id=i,
+                    params={
+                        'limit': '4',
+                        'ref_visit_motive_ids[]': motives,
+                        'speciality_id': '5494',
+                        'search_result_format': 'json'
+                    }
+                )
+                try:
+                    yield page.doc['search_result']
+                except KeyError:
+                    pass
+
+            if next_page:
+                for center in self.find_centers(where, motives, next_page):
+                    yield center
 
 class CenterBookingPage(JsonPage):
     def find_motive(self, regex, singleShot=False):
