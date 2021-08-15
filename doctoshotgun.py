@@ -3,6 +3,7 @@ import sys
 import re
 import logging
 import tempfile
+from abc import ABCMeta, abstractmethod
 from time import sleep
 import json
 from urllib.parse import urlparse
@@ -130,6 +131,16 @@ class CenterResultPage(JsonPage):
 
 class CenterPage(HTMLPage):
     pass
+
+
+class Country:
+    def __init__(self, args):
+        self.doctolib_map[args.country]
+
+class City(Country):
+
+class Center(Country):
+
 
 
 class CenterBookingPage(JsonPage):
