@@ -888,23 +888,29 @@ class Application:
         if not docto.do_login(args.code):
             return 1
 
+        # Added client code part of the builder pattern
+        builder = AppointmentBuilder1()
+
         patients = docto.get_patients()
         # took out patient from here
+        builder.product.setPatient
         
 
         motives = []
         # took out if statements from here
-        
+        builder.product.setVaccineMotive
 
         vaccine_list = [docto.vaccine_motives[motive] for motive in motives]
 
         if args.start_date:
             #took out start date from here
-            pass
+            builder.product.setDate
+            #pass
             
         if args.end_date:
             #took out end date from here
-            pass
+            builder.product.setDate
+            #pass
 
         log('Starting to look for vaccine slots for %s %s between %s and %s...',
             docto.patient['first_name'], docto.patient['last_name'], start_date, end_date)
@@ -912,7 +918,7 @@ class Application:
         log('Country: %s ', args.country)
         log('This may take a few minutes/hours, be patient!')
         # took out cities = [docto.normalize(city) for city in args.city.split(',')] from here
-        
+        builder.product.setCity
 
         while True:
             log_ts()
