@@ -138,8 +138,8 @@ class Builder(ABC):
     # specifying methods for creating / booking appointments with different arguments
 
     @property
-    @abstract method
-    def product(self):
+    @abstractmethod
+    def product(self) -> None:
         pass
 
     @abstractmethod
@@ -170,9 +170,11 @@ class Builder(ABC):
     def setDate(self) -> None:
         pass
 
-class Product:
-    def __init__(self, args):
+
+class Product1():
+    def __init__(self, args) -> None:
         self.parts = args
+
 
 class AppointmentBuilder1(Builder):
     def __init__(self) -> None:
@@ -181,14 +183,19 @@ class AppointmentBuilder1(Builder):
 
         self.reset()
 
-    def product(self):
-        self._product = Product1
+    def reset(self) -> None:
+        self._product = Product1()
+
+    def product(self) -> Product1:
+        product = self._product
+        self.reset
+        return product
 
     def setPatient(self) -> None:
         if len(patients) == 0:
             print("It seems that you don't have any Patient registered in your Doctolib account. Please fill your Patient data on Doctolib Website.")
             return 1
-        if args.patient >= 0 and args.patient < len(patients):
+        if self.product.patient >= 0 and self.product.patient < len(patients):
             docto.patient = patients[args.patient]
         elif len(patients) > 1:
             print('Available patients are:')
@@ -206,6 +213,13 @@ class AppointmentBuilder1(Builder):
                     break
         else:
             docto.patient = patients[0]
+
+    def setCountry(self):
+        self.product.country
+
+    def setCity(self):
+        cities = [docto.normalize(city) for city in self.product.city.split(',')]
+        # self.product.city
 
     def setDate(self):
         if self.product.parts.start_date:
@@ -229,38 +243,40 @@ class AppointmentBuilder1(Builder):
             end_date = start_date + relativedelta(days=args.time_window)
 
 
-class Director:
-    "The Director is responsible for executing the building steps in a particular sequence"
 
-    def __init__(self):
-        self._builder = None
+    
+#class Director:
+    #"The Director is responsible for executing the building steps in a particular sequence"
 
-    def builder(self) -> Builder:
-        return self._builder
+    #def __init__(self):
+        #self._builder = None
 
-    @builder.setter
-    def builder(self, builder: Builder):
-        self._builder = builder
+    #def builder(self) -> Builder:
+        #return self._builder
 
-    def build_basic_appointment(self) -> None:
-        self.builder.setPatient()
-        self.builder.setCountry()
-        self.builder.setCity()
+   # @builder
+   # def builder(self, builder: Builder):
+   #     self._builder = builder
 
-    def build_special_appointment1(self) -> None:
+   # def build_basic_appointment(self) -> None:
+   #     self.builder.setPatient()
+   #     self.builder.setCountry()
+   #     self.builder.setCity()
+
+   # def build_special_appointment1(self) -> None:
         # basic appointment + specific time window (change from default = 7)
-        self.builder.build_basic_appointment
-        self.builder.setTimeWindow
-
-    def build_special_appointment2(self) -> None:
+   #     self.builder.build_basic_appointment
+   #     self.builder.setTimeWindow
+   #
+   # def build_special_appointment2(self) -> None:
         # basic appointment + specified vaccine type
-        self.builder.build_basic_appointment
-        self.builder.setVaccineMotive
+   #     self.builder.build_basic_appointment
+   #     self.builder.setVaccineMotive
 
-    def build_special_appointment3(self) -> None:
+   # def build_special_appointment3(self) -> None:
         # basic appointment + specified vaccine type + dose
-        self.builder.build_special_appointment2
-        self.builder.setDose
+   #     self.builder.build_special_appointment2
+   #     self.builder.setDose
 
 
 class CenterBookingPage(JsonPage):
@@ -877,16 +893,19 @@ class Application:
 
         if args.start_date:
             #took out start date from here
+            pass
             
         if args.end_date:
             #took out end date from here
+            pass
 
         log('Starting to look for vaccine slots for %s %s between %s and %s...',
             docto.patient['first_name'], docto.patient['last_name'], start_date, end_date)
         log('Vaccines: %s', ', '.join(vaccine_list))
         log('Country: %s ', args.country)
         log('This may take a few minutes/hours, be patient!')
-        cities = [docto.normalize(city) for city in args.city.split(',')]
+        # took out cities = [docto.normalize(city) for city in args.city.split(',')] from here
+        
 
         while True:
             log_ts()
