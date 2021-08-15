@@ -3,6 +3,7 @@ import sys
 import re
 import logging
 import tempfile
+from abc import ABCMeta, abstractmethod
 from time import sleep
 import json
 from urllib.parse import urlparse
@@ -131,6 +132,156 @@ class CenterResultPage(JsonPage):
 class CenterPage(HTMLPage):
     pass
 
+
+class Country:
+    def __init__(self, args):
+        self.doctolib_map[args.country]
+
+    def find_centers(self, where, motives=None, page=1):
+        pass
+
+    def find_city(self, args):
+        pass
+
+class City(Country):
+    def find_city(self, args):
+        self.args.city
+
+    def find_centers(self, where, motives=None, page=1):
+        if motives is None:
+            motives = self.vaccine_motives.keys()
+        for city in where:
+            try:
+                self.centers.go(where=city, params={
+                                'ref_visit_motive_ids[]': motives, 'page': page})
+            except ServerError as e:
+                if e.response.status_code in [503]:
+                    if 'text/html' in e.response.headers['Content-Type'] \
+                        and ('cloudflare' in e.response.text or
+                             'Checking your browser before accessing' in e .response.text):
+                        log('Request blocked by CloudFlare', color='red')
+                    return
+                if e.response.status_code in [520]:
+                    log('Cloudflare is unable to connect to Doctolib server. Please retry later.', color='red')
+                    return
+                raise
+            except HTTPNotFound as e:
+                raise CityNotFound(city) from e
+
+            next_page = self.page.get_next_page()
+
+            for i in self.page.iter_centers_ids():
+                page = self.center_result.open(
+                    id=i,
+                    params={
+                        'limit': '4',
+                        'ref_visit_motive_ids[]': motives,
+                        'speciality_id': '5494',
+                        'search_result_format': 'json'
+                    }
+                )
+                try:
+                    yield page.doc['search_result']
+                except KeyError:
+                    pass
+
+            if next_page:
+                for center in self.find_centers(where, motives, next_page):
+                    yield center
+
+class Center(Country):
+    def find_city(self, args):
+        self.args.city
+
+    def find_centers(self, where, motives=None, page=1):
+        if motives is None:
+            motives = self.vaccine_motives.keys()
+        for city in where:
+            try:
+                self.centers.go(where=city, params={
+                                'ref_visit_motive_ids[]': motives, 'page': page})
+            except ServerError as e:
+                if e.response.status_code in [503]:
+                    if 'text/html' in e.response.headers['Content-Type'] \
+                        and ('cloudflare' in e.response.text or
+                             'Checking your browser before accessing' in e .response.text):
+                        log('Request blocked by CloudFlare', color='red')
+                    return
+                if e.response.status_code in [520]:
+                    log('Cloudflare is unable to connect to Doctolib server. Please retry later.', color='red')
+                    return
+                raise
+            except HTTPNotFound as e:
+                raise CityNotFound(city) from e
+
+            next_page = self.page.get_next_page()
+
+            for i in self.page.iter_centers_ids():
+                page = self.center_result.open(
+                    id=i,
+                    params={
+                        'limit': '4',
+                        'ref_visit_motive_ids[]': motives,
+                        'speciality_id': '5494',
+                        'search_result_format': 'json'
+                    }
+                )
+                try:
+                    yield page.doc['search_result']
+                except KeyError:
+                    pass
+
+            if next_page:
+                for center in self.find_centers(where, motives, next_page):
+                    yield center
+
+class Booking:
+    def __init__(self, Country):
+        self.Country = Country
+
+    def book_place(self, center, vaccine_list, start_date, end_date, only_second, only_third, dry_run=False):
+        pass
+
+class App(Booking):
+    def __init__(self, Country, objects):
+        super().__init__(Country)
+        self.object = objects
+
+    def book_place(self, center, vaccine_list, start_date, end_date, only_second, only_third, dry_run=False):
+        self.open(center['url'])
+        p = urlparse(center['url'])
+        center_id = p.path.split('/')[-1]
+
+        center_page = self.center_booking.go(center_id=center_id)
+        profile_id = self.page.get_profile_id()
+        # extract motive ids based on the vaccine names
+        motives_id = dict()
+        for vaccine in vaccine_list:
+            motives_id[vaccine] = self.page.find_motive(
+                r'.*({})'.format(vaccine), singleShot=(vaccine == self.vaccine_motives[self.KEY_JANSSEN] or only_second or only_third))
+
+        motives_id = dict((k, v)
+                          for k, v in motives_id.items() if v is not None)
+        if len(motives_id.values()) == 0:
+            log('Unable to find requested vaccines in motives')
+            log('Motives: %s', ', '.join(self.page.get_motives()))
+            return False
+
+        for place in self.page.get_places():
+            if place['name']:
+                log('– %s...', place['name'])
+            practice_id = place['practice_ids'][0]
+            for vac_name, motive_id in motives_id.items():
+                log('  Vaccine %s...', vac_name, end=' ', flush=True)
+                agenda_ids = center_page.get_agenda_ids(motive_id, practice_id)
+                if len(agenda_ids) == 0:
+                    # do not filter to give a chance
+                    agenda_ids = center_page.get_agenda_ids(motive_id)
+
+                if self.try_to_book_place(profile_id, motive_id, practice_id, agenda_ids, vac_name.lower(), start_date, end_date, only_second, only_third, dry_run):
+                    return True
+
+        return False
 
 class CenterBookingPage(JsonPage):
     def find_motive(self, regex, singleShot=False):
@@ -293,47 +444,8 @@ class Doctolib(LoginBrowser):
 
         return True
 
-    def find_centers(self, where, motives=None, page=1):
-        if motives is None:
-            motives = self.vaccine_motives.keys()
-        for city in where:
-            try:
-                self.centers.go(where=city, params={
-                                'ref_visit_motive_ids[]': motives, 'page': page})
-            except ServerError as e:
-                if e.response.status_code in [503]:
-                    if 'text/html' in e.response.headers['Content-Type'] \
-                        and ('cloudflare' in e.response.text or
-                             'Checking your browser before accessing' in e .response.text):
-                        log('Request blocked by CloudFlare', color='red')
-                    return
-                if e.response.status_code in [520]:
-                    log('Cloudflare is unable to connect to Doctolib server. Please retry later.', color='red')
-                    return
-                raise
-            except HTTPNotFound as e:
-                raise CityNotFound(city) from e
-
-            next_page = self.page.get_next_page()
-
-            for i in self.page.iter_centers_ids():
-                page = self.center_result.open(
-                    id=i,
-                    params={
-                        'limit': '4',
-                        'ref_visit_motive_ids[]': motives,
-                        'speciality_id': '5494',
-                        'search_result_format': 'json'
-                    }
-                )
-                try:
-                    yield page.doc['search_result']
-                except KeyError:
-                    pass
-
-            if next_page:
-                for center in self.find_centers(where, motives, next_page):
-                    yield center
+    #def find_centers(self, where, motives=None, page=1):
+        
 
     def get_patients(self):
         self.master_patient.go()
