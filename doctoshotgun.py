@@ -235,6 +235,54 @@ class Center(Country):
                 for center in self.find_centers(where, motives, next_page):
                     yield center
 
+class Booking:
+    def __init__(self, Country):
+        self.Country = Country
+
+    def book_place(self, center, vaccine_list, start_date, end_date, only_second, only_third, dry_run=False):
+        pass
+
+class App(Booking):
+    def __init__(self, Country, objects):
+        super().__init__(Country)
+        self.object = objects
+
+    def book_place(self, center, vaccine_list, start_date, end_date, only_second, only_third, dry_run=False):
+        self.open(center['url'])
+        p = urlparse(center['url'])
+        center_id = p.path.split('/')[-1]
+
+        center_page = self.center_booking.go(center_id=center_id)
+        profile_id = self.page.get_profile_id()
+        # extract motive ids based on the vaccine names
+        motives_id = dict()
+        for vaccine in vaccine_list:
+            motives_id[vaccine] = self.page.find_motive(
+                r'.*({})'.format(vaccine), singleShot=(vaccine == self.vaccine_motives[self.KEY_JANSSEN] or only_second or only_third))
+
+        motives_id = dict((k, v)
+                          for k, v in motives_id.items() if v is not None)
+        if len(motives_id.values()) == 0:
+            log('Unable to find requested vaccines in motives')
+            log('Motives: %s', ', '.join(self.page.get_motives()))
+            return False
+
+        for place in self.page.get_places():
+            if place['name']:
+                log('– %s...', place['name'])
+            practice_id = place['practice_ids'][0]
+            for vac_name, motive_id in motives_id.items():
+                log('  Vaccine %s...', vac_name, end=' ', flush=True)
+                agenda_ids = center_page.get_agenda_ids(motive_id, practice_id)
+                if len(agenda_ids) == 0:
+                    # do not filter to give a chance
+                    agenda_ids = center_page.get_agenda_ids(motive_id)
+
+                if self.try_to_book_place(profile_id, motive_id, practice_id, agenda_ids, vac_name.lower(), start_date, end_date, only_second, only_third, dry_run):
+                    return True
+
+        return False
+
 class CenterBookingPage(JsonPage):
     def find_motive(self, regex, singleShot=False):
         for s in self.doc['data']['visit_motives']:
